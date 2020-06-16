@@ -42,37 +42,42 @@ function parseAll(){
     
     // get the checkbox Range (really just one cell, but it is a range object)
     var checkbox = activeSheet.getRange(i, 1);
+    var toParse = !(checkbox.isChecked()) && (answerVals[i-1][1] !== "")
   
-    
+    // Logic to check is the person who answered is also a choir director
+    var isChoirDir = true;
     
     // If the sheets already exist, then update them instead of making new ones
     // else make sure the "done box" is not checked and the school/location cell is filled in
     // if both are satisified then copy the template and change it's name
-    if (newPM != null){
-      var rangeNameFilter = "'" + newPM.getName() + "'!";
-      var choirDirRange = spreadsheet.getRangeByName(rangeNameFilter+"ChoirDir");
-      // check here if the box for choir director is checked or not
-      addNewChoirSection_(choirDirRange, newPM, i);
-      // updatePage_(i);
-    } else if (!(checkbox.isChecked()) && (answerVals[i-1][1] !== "")){
+    if (newPM != null && toParse){
+      if (isChoirDir) {
+        var choirDirRange = spreadsheet.getRangeByName("ChoirDir");
+        var choirFormMap = getChoirInfo(answerVals[1], answerVals[i-1], i);
+        updateInfoWithNewChoir_(choirDirRange, newPM, i, choirFormMap);
+      } else {
+        var formMap = getInfo_(answerVals[1], answerVals[i-1]);
+        sortInfo_(newPM, formMap);
+      }
+    } else if (toParse){
       templatePM.activate();
       newPM = spreadsheet.duplicateActiveSheet();
       newPM.setName("PM " + answerVals[i-1][1].toLowerCase());
       var formMap = getInfo_(answerVals[1], answerVals[i-1]);
-      createPage_(newPM, formMap);
+      sortInfo_(newPM, formMap);
     }
     
     
     
     // Same logic as above just for the CM page
-    if (newCM != null){
+    if (newCM != null && toParse){
       //updateCM_(newCM);
-    } else if (!(checkbox.isChecked()) && (answerVals[i-1][1] !== "")){
+    } else if (toParse){
       templateCM.activate();
       newCM = spreadsheet.duplicateActiveSheet();
       newCM.setName("CM " + answerVals[i-1][1].toLowerCase());
       var formMap = getInfo_(answerVals[1], answerVals[i-1]);
-      createPage_(newPM, formMap);
+      sortInfo_(newPM, formMap);
     }
   }
   
@@ -88,31 +93,34 @@ function parseAll(){
 
 
 
-// This function will delete all the CM/PM tabs for easier clean up after they have been coppied away
-function cleanSheet(){
-  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  var tabs = spreadsheet.getSheets();
-  for (var i = 0; i < tabs.length; i++){
-    if (tabs[i].getSheetName().startsWith("PM") || tabs[i].getSheetName().startsWith("CM")){
-      spreadsheet.deleteSheet(tabs[i]);
+
+function getInfo_(tagRow, infoRow){
+  var formMap = new Map();
+  for (var i=3; i < infoRow.length; i++){
+    if (tagRow[i] !== "n/a"){
+      formMap.set(tagRow[i].toLowerCase(), infoRow[i]);
     }
   }
-  spreadsheet.setActiveSheet(spreadsheet.getSheetByName("Form Responses 1"));
+  return formMap;
+}
+
+function getChoirInfo_(tagRow, infoRow, nameNum){
+  var formMap = new Map();
+  for (var i=3; i < infoRow.length; i++){
+    if (tagRow[i] !== "n/a"){
+      if (tagRow[i].endsWith("~")) {
+        formMap.set(tagRow[i].toLowerCase() + nameNum, infoRow[i]);
+      } else {
+        formMap.set(tagRow[i].toLowerCase(), infoRow[i]);
+      }
+    }
+  }
+  return formMap;
 }
 
 
 
-// TODO: Figure out a decent way to update the pages
-// This will generally function the same as create page, except it will check if it is choirDir info and will update accordingly
-function updatePage_(currSheet){
-  // Temporary //
-  // Will eventaully handle updating and already existing sheet
-  //SpreadsheetApp.getActiveSpreadsheet().deleteSheet(currSheet);
-}
-
-
-
-function createPage_(newSheet, formDataMap){
+function sortInfo_(newSheet, formDataMap){
   var testSheet = SpreadsheetApp.getActiveSheet();
   var testRange = testSheet.getDataRange();
   var testValues = testRange.getValues();
@@ -138,24 +146,35 @@ function createPage_(newSheet, formDataMap){
 }
 
 
+// TODO: Figure out a decent way to update the pages
+// This will generally function the same as create page, except it will check if it is choirDir info and will update accordingly
+function updateInfo_(currSheet){
+  // Temporary //
+  // Will eventaully handle updating and already existing sheet
+  //SpreadsheetApp.getActiveSpreadsheet().deleteSheet(currSheet);
+}
+
+
 // TODO: Update this method to make all the new namedRanges in the proper place with "nameNum" attached to the end of it
-function addNewChoirSection_(choirDirRange, newSheet, nameNum){
-  var spreadsheet = SpreadsheetApp.getActiveSpreadhsheet();
+function updateInfoWithNewChoir_(choirDirRange, newSheet, nameNum, choirFormMap){
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   //setNamedRange(name, range)
   var newSheetRange = newSheet.getDataRange();
   choirDirRange.copyFormatToRange(newSheet, 1, choirDirRange.getWidth(), newSheetRange.getHeight() + 1, newSheetRange.getHeight() + 1 + choirDirRange.getHeight());
   choirDirRange.copyValuesToRange(newSheet, 1, choirDirRange.getWidth(), newSheetRange.getHeight() + 1, newSheetRange.getHeight() + 1 + choirDirRange.getHeight());
+  sortInfo_(newSheet, choirFormMap);
 }
 
 
 
-
-function getInfo_(tagRow, infoRow){
-  var formMap = new Map();
-  for (var i=3; i < infoRow.length; i++){
-    if (tagRow[i] !== "n/a"){
-      formMap.set(tagRow[i].toLowerCase(), infoRow[i]);
+// This function will delete all the CM/PM tabs for easier clean up after they have been coppied away
+function cleanSheet(){
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var tabs = spreadsheet.getSheets();
+  for (var i = 0; i < tabs.length; i++){
+    if (tabs[i].getSheetName().startsWith("PM") || tabs[i].getSheetName().startsWith("CM")){
+      spreadsheet.deleteSheet(tabs[i]);
     }
   }
-  return formMap;
+  spreadsheet.setActiveSheet(spreadsheet.getSheetByName("Form Responses 1"));
 }
