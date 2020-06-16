@@ -43,28 +43,36 @@ function parseAll(){
     // get the checkbox Range (really just one cell, but it is a range object)
     var checkbox = activeSheet.getRange(i, 1);
   
+    
+    
     // If the sheets already exist, then update them instead of making new ones
     // else make sure the "done box" is not checked and the school/location cell is filled in
     // if both are satisified then copy the template and change it's name
     if (newPM != null){
-      updatePM_(newPM);
+      var rangeNameFilter = "'" + newPM.getName() + "'!";
+      var choirDirRange = spreadsheet.getRangeByName(rangeNameFilter+"ChoirDir");
+      // check here if the box for choir director is checked or not
+      addNewChoirSection_(choirDirRange, newPM, i);
+      // updatePage_(i);
     } else if (!(checkbox.isChecked()) && (answerVals[i-1][1] !== "")){
       templatePM.activate();
       newPM = spreadsheet.duplicateActiveSheet();
       newPM.setName("PM " + answerVals[i-1][1].toLowerCase());
       var formMap = getInfo_(answerVals[1], answerVals[i-1]);
-      createPM_(newPM, formMap);
+      createPage_(newPM, formMap);
     }
+    
+    
     
     // Same logic as above just for the CM page
     if (newCM != null){
-      updateCM_(newCM);
+      //updateCM_(newCM);
     } else if (!(checkbox.isChecked()) && (answerVals[i-1][1] !== "")){
       templateCM.activate();
       newCM = spreadsheet.duplicateActiveSheet();
       newCM.setName("CM " + answerVals[i-1][1].toLowerCase());
       var formMap = getInfo_(answerVals[1], answerVals[i-1]);
-      createCM_(newPM);
+      createPage_(newPM, formMap);
     }
   }
   
@@ -78,6 +86,8 @@ function parseAll(){
   spreadsheet.setActiveSheet(spreadsheet.getSheetByName("Form Responses 1")); // Just to make sure the active sheet is always the Form Response page when the script is finished
 }
 
+
+
 // This function will delete all the CM/PM tabs for easier clean up after they have been coppied away
 function cleanSheet(){
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
@@ -90,13 +100,19 @@ function cleanSheet(){
   spreadsheet.setActiveSheet(spreadsheet.getSheetByName("Form Responses 1"));
 }
 
-function updatePM_(currSheet){
+
+
+// TODO: Figure out a decent way to update the pages
+// This will generally function the same as create page, except it will check if it is choirDir info and will update accordingly
+function updatePage_(currSheet){
   // Temporary //
   // Will eventaully handle updating and already existing sheet
-  SpreadsheetApp.getActiveSpreadsheet().deleteSheet(currSheet);
+  //SpreadsheetApp.getActiveSpreadsheet().deleteSheet(currSheet);
 }
 
-function createPM_(newSheet, formDataMap){
+
+
+function createPage_(newSheet, formDataMap){
   var testSheet = SpreadsheetApp.getActiveSheet();
   var testRange = testSheet.getDataRange();
   var testValues = testRange.getValues();
@@ -121,15 +137,17 @@ function createPM_(newSheet, formDataMap){
   newSheet.autoResizeRows(1, newSheet.getMaxRows());
 }
 
-function updateCM_(currSheet){
-  // Temporary //
-  // Will eventaully handle updating and already existing sheet
-  SpreadsheetApp.getActiveSpreadsheet().deleteSheet(currSheet);
+
+// TODO: Update this method to make all the new namedRanges in the proper place with "nameNum" attached to the end of it
+function addNewChoirSection_(choirDirRange, newSheet, nameNum){
+  var spreadsheet = SpreadsheetApp.getActiveSpreadhsheet();
+  //setNamedRange(name, range)
+  var newSheetRange = newSheet.getDataRange();
+  choirDirRange.copyFormatToRange(newSheet, 1, choirDirRange.getWidth(), newSheetRange.getHeight() + 1, newSheetRange.getHeight() + 1 + choirDirRange.getHeight());
+  choirDirRange.copyValuesToRange(newSheet, 1, choirDirRange.getWidth(), newSheetRange.getHeight() + 1, newSheetRange.getHeight() + 1 + choirDirRange.getHeight());
 }
 
-function createCM_(newSheet){
-  
-}
+
 
 
 function getInfo_(tagRow, infoRow){
