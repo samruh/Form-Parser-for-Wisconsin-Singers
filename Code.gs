@@ -4,19 +4,20 @@ function onOpen() {
   .addItem("Sort Responses", "parseAll")
   .addSeparator()
   .addItem("Clear CM/PM Tabs", "cleanSheet")
+  .addSeparator()
+  .addItem("Archive Done Tabs", "archiveFinishedRows")
   .addToUi();
 }
 
 /* IDEAS:
-- Add section for checking if email has been used more than once and change to update mode and not change mode
-    -> Might actually not matter -> might want most updated response
-- Maybe try adding a coulmn thats a link to a different spreadsheet so the formatted sheets can immediately be coppied over
 - How to store version info of multiple submits?
 - Make a new section for each new choir director submission -> duplicate certain section of template
-
-
-
-
+     -> Possibly compare A1 notations to figure out if a certain namedRange is within the ChoirDir range
+- add more special formatted cells in sort info -> possibly make new method that gets called containg siwtch statement??
+- put archived data into some sort of order -> maybe alphabetical or in order of time or something else entirely
+- add in error checking to make sure the user is on the right sheet when starting to parse info and when starting to archive data
+- do test run with actual form responses
+- make actual form template finally -> ask Josh about his template too
 */
 
 // Main function to parse all the information
@@ -42,7 +43,8 @@ function parseAll(){
     
     // get the checkbox Range (really just one cell, but it is a range object)
     var checkbox = activeSheet.getRange(i, 1);
-    var toParse = !(checkbox.isChecked()) && (answerVals[i-1][1] !== "")
+    var toParse = !(checkbox.isChecked()) && (answerVals[i-1][1] !== "");
+    
   
     // Logic to check is the person who answered is also a choir director
     var isChoirDir = true;
@@ -79,6 +81,9 @@ function parseAll(){
       var formMap = getInfo_(answerVals[1], answerVals[i-1]);
       sortInfo_(newPM, formMap);
     }
+    
+    // update the checkbox to true
+    //checkbox.setValue(true);
   }
   
   // Move the two templates and the form responses to the front of the sheet list
@@ -88,6 +93,8 @@ function parseAll(){
   spreadsheet.moveActiveSheet(1);
   templatePM.activate();
   spreadsheet.moveActiveSheet(1);
+  spreadsheet.getSheetByName("Archive").activate();
+  spreadsheet.moveActiveSheet(1);
   spreadsheet.setActiveSheet(spreadsheet.getSheetByName("Form Responses 1")); // Just to make sure the active sheet is always the Form Response page when the script is finished
 }
 
@@ -96,7 +103,7 @@ function parseAll(){
 
 function getInfo_(tagRow, infoRow){
   var formMap = new Map();
-  for (var i=3; i < infoRow.length; i++){
+  for (var i=2; i < infoRow.length; i++){
     if (tagRow[i] !== "n/a"){
       formMap.set(tagRow[i].toLowerCase(), infoRow[i]);
     }
@@ -106,7 +113,7 @@ function getInfo_(tagRow, infoRow){
 
 function getChoirInfo_(tagRow, infoRow, nameNum){
   var formMap = new Map();
-  for (var i=3; i < infoRow.length; i++){
+  for (var i=2; i < infoRow.length; i++){
     if (tagRow[i] !== "n/a"){
       if (tagRow[i].endsWith("~")) {
         formMap.set(tagRow[i].toLowerCase() + nameNum, infoRow[i]);
@@ -134,15 +141,27 @@ function sortInfo_(newSheet, formDataMap){
   namedRanges.forEach(function(specNamedRange) {
     var specRange = specNamedRange.getRange();
     var mapRangeName = specNamedRange.getName().replace(rangeNameFilter, "").toLowerCase();
+    Logger.log(mapRangeName);
     if (formDataMap.has(mapRangeName)) {
       var rangeVals = specRange.getValues();
+      Logger.log("Data for name above was found in map");
       rangeVals[1][0] = formDataMap.get(mapRangeName);
       specRange.setValues(rangeVals);
+      if (mapRangeName.includes("_")){
+        Logger.log("Made it inside of here!");
+        switch (mapRangeName.split("_")[1]) {
+          case "date": 
+            specRange.setNumberFormat("dddd, mmmm d yyy at h:mm am/pm");
+            break;
+          default:
+            throw new Error('Something went horribly wrong!!!');
+        }
+      }
     }
   });
   
   // might not want this, but we will see
-  newSheet.autoResizeRows(1, newSheet.getMaxRows());
+  newSheet.autoResizeColumns(1, newSheet.getMaxColumns());
 }
 
 
@@ -177,4 +196,40 @@ function cleanSheet(){
     }
   }
   spreadsheet.setActiveSheet(spreadsheet.getSheetByName("Form Responses 1"));
+}
+
+
+// This function will move all the rows marked done to an archive sheet
+function archiveFinishedRows(){
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var formResponse = spreadsheet.getActiveSheet();
+  var formResponseRange = formResponse.getDataRange();
+  var formResponseValues = formResponseRange.getValues();
+  var archive = spreadsheet.getSheetByName("Archive");
+  var archiveNextRange = archive.getRange(archive.getDataRange().getHeight() + 1, 1, archive.getMaxRows(), formResponseRange.getWidth());
+  var archiveNextValues = archiveNextRange.getValues();
+  
+  
+  var archivePos = 0;
+  for (var i = 3; i < formResponseRange.getHeight() + 1; i++) {
+    var checkbox = formResponse.getRange(i - archivePos, 1);
+    if (checkbox.isChecked()) {
+      archiveNextValues[archivePos] = formResponseValues[i-1];
+      formResponse.deleteRow(i - archivePos);
+      archivePos ++;  
+    }
+  }
+  archiveNextRange.setValues(archiveNextValues);
+  
+  
+  var finishedArchiveRange = archive.getRange(3, 1, archive.getDataRange().getHeight() - 2, 1);
+  for (var i = 1; i < finishedArchiveRange.getHeight() + 1; i++){
+    var currCell = finishedArchiveRange.getCell(i,1);
+    var criteria = SpreadsheetApp.DataValidationCriteria.CHECKBOX;
+    var rule = SpreadsheetApp.newDataValidation()
+    .requireCheckbox()
+    .build();
+    currCell.setDataValidation(rule);
+  }
+  
 }
