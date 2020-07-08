@@ -15,9 +15,7 @@ function onOpen() {
      -> Possibly compare A1 notations to figure out if a certain namedRange is within the ChoirDir range
 - add more special formatted cells in sort info -> possibly make new method that gets called containg siwtch statement??
 - put archived data into some sort of order -> maybe alphabetical or in order of time or something else entirely
-- add in error checking to make sure the user is on the right sheet when starting to parse info and when starting to archive data
-- do test run with actual form responses
-- make actual form template finally -> ask Josh about his template too
+- ask Josh about his template
 */
 
 // Main function to parse all the information
@@ -28,62 +26,73 @@ function parseAll(){
   var templatePM = spreadsheet.getSheetByName("Template - PM"); // the PM template sheet
   var templateCM = spreadsheet.getSheetByName("Template - CM"); // the CM template sheet
   var activeSheet = spreadsheet.getActiveSheet(); // The active sheet (should always be the form responses)
-  var answerRange  = activeSheet.getDataRange(); // Get the entire range the has info from the active sheet
+  var answerRange = activeSheet.getDataRange(); // Get the entire range the has info from the active sheet
   var answerVals = answerRange.getValues(); // Get the raw values in a 2D Array
   
+  // This is purely to ensure that the user can't break the program by sorting from a non-"form response" sheet
+  if (activeSheet.getName() !== "Form Responses 1"){
+    throw new Error("Please make sure \"Form Response 1\" is the active sheet.");
+  }
+ 
   // main loop to run through each row of data
   // Start at 3 because of the questions row and the tag row and row/column counts start at 1
   for (var i = 3; i < answerRange.getHeight() + 1; i++){
-
-    // Start by checking if the sheet needs to be made new or just updated
-    // i-1 is to accomodate the fact that ranges start at 1 and arrays start at 0
-    // the toLowerCase is simply to make sure weird capitalization in the school/location cell won't break the code
-    var newPM = spreadsheet.getSheetByName("PM " + answerVals[i-1][1].toLowerCase());
-    var newCM = spreadsheet.getSheetByName("CM " + answerVals[i-1][1].toLowerCase());
     
     // get the checkbox Range (really just one cell, but it is a range object)
     var checkbox = activeSheet.getRange(i, 1);
     var toParse = !(checkbox.isChecked()) && (answerVals[i-1][1] !== "");
     
-  
-    // Logic to check is the person who answered is also a choir director
-    var isChoirDir = true;
-    
-    // If the sheets already exist, then update them instead of making new ones
-    // else make sure the "done box" is not checked and the school/location cell is filled in
-    // if both are satisified then copy the template and change it's name
-    if (newPM != null && toParse){
-      if (isChoirDir) {
-        var choirDirRange = spreadsheet.getRangeByName("ChoirDir");
-        var choirFormMap = getChoirInfo(answerVals[1], answerVals[i-1], i);
-        updateInfoWithNewChoir_(choirDirRange, newPM, i, choirFormMap);
-      } else {
+    if (toParse){
+      // Start by checking if the sheet needs to be made new or just updated
+      // i-1 is to accomodate the fact that ranges start at 1 and arrays start at 0
+      // the toLowerCase is simply to make sure weird capitalization in the school/location cell won't break the code
+      var newPM = spreadsheet.getSheetByName("PM " + answerVals[i-1][1].toLowerCase());
+      var newCM = spreadsheet.getSheetByName("CM " + answerVals[i-1][1].toLowerCase());
+      
+      // Call function to check for sponsor, tech, and choir director
+      var answerLength = answerRange.getWidth();
+      var answerArr = getPersonType_(activeSheet.getRange(2, 1, 1, answerLength), activeSheet.getRange(i, 1, 1, answerLength));
+      var isSponsor = answerArr[0];
+      var isTech = answerArr[1];
+      var isChoirDir = answerArr[2];
+      
+      // If the sheets already exist, then update them instead of making new ones
+      // else make sure the "done box" is not checked and the school/location cell is filled in
+      // if both are satisified then copy the template and change it's name
+      
+      // TODO:: Optimize this to only call getInfo once per form submission, use nested if of the other person's tab
+      // Also figure out exactly how to map certain person, phone, email to the correct boxes
+      if (newPM != null){
+        if (isChoirDir) {
+          var choirDirRange = spreadsheet.getRangeByName("ChoirDir");
+          var choirFormMap = getChoirInfo(answerVals[1], answerVals[i-1], i);
+          updateInfoWithNewChoir_(choirDirRange, newPM, i, choirFormMap);
+        } else {
+          var formMap = getInfo_(answerVals[1], answerVals[i-1]);
+          sortInfo_(newPM, formMap);
+        }
+      } else if (toParse){
+        templatePM.activate();
+        newPM = spreadsheet.duplicateActiveSheet();
+        newPM.setName("PM " + answerVals[i-1][1].toLowerCase());
         var formMap = getInfo_(answerVals[1], answerVals[i-1]);
         sortInfo_(newPM, formMap);
       }
-    } else if (toParse){
-      templatePM.activate();
-      newPM = spreadsheet.duplicateActiveSheet();
-      newPM.setName("PM " + answerVals[i-1][1].toLowerCase());
-      var formMap = getInfo_(answerVals[1], answerVals[i-1]);
-      sortInfo_(newPM, formMap);
+      
+      // Same logic as above just for the CM page
+      if (newCM != null){
+        //updateCM_(newCM);
+      } else if (toParse){
+        templateCM.activate();
+        newCM = spreadsheet.duplicateActiveSheet();
+        newCM.setName("CM " + answerVals[i-1][1].toLowerCase());
+        var formMap = getInfo_(answerVals[1], answerVals[i-1]);
+        sortInfo_(newPM, formMap);
+      }
+      
+      // update the checkbox to true
+      checkbox.setValue(true);
     }
-    
-    
-    
-    // Same logic as above just for the CM page
-    if (newCM != null && toParse){
-      //updateCM_(newCM);
-    } else if (toParse){
-      templateCM.activate();
-      newCM = spreadsheet.duplicateActiveSheet();
-      newCM.setName("CM " + answerVals[i-1][1].toLowerCase());
-      var formMap = getInfo_(answerVals[1], answerVals[i-1]);
-      sortInfo_(newPM, formMap);
-    }
-    
-    // update the checkbox to true
-    //checkbox.setValue(true);
   }
   
   // Move the two templates and the form responses to the front of the sheet list
@@ -98,7 +107,27 @@ function parseAll(){
   spreadsheet.setActiveSheet(spreadsheet.getSheetByName("Form Responses 1")); // Just to make sure the active sheet is always the Form Response page when the script is finished
 }
 
-
+// This is a helper function designed to check what type of person is filling out the form
+function getPersonType_(tagRange, dataRange){
+  // Array to tell who is filling out the form -> sponsor, tech, director
+  var personTypeArr = [false, false, false];
+  var dataValues = dataRange.getValues();
+  var tagValues = tagRange.getValues();
+  for (var i = 0; i < tagValues[0].length; i++){
+    if (tagValues[0][i].includes("sponsor-") || tagValues[0][i].includes("tech-") || tagValues[0][i].includes("director-")){
+      if (dataValues[0][i].toLowerCase().includes("sponsor")){
+        personTypeArr[0] = true;
+      }
+      if (dataValues[0][i].toLowerCase().includes("tech")){
+        personTypeArr[1] = true;
+      }
+      if (dataValues[0][i].toLowerCase().includes("director")){
+        personTypeArr[2] = true;
+      }
+    }
+  }
+  return personTypeArr;
+}
 
 
 function getInfo_(tagRow, infoRow){
@@ -141,14 +170,11 @@ function sortInfo_(newSheet, formDataMap){
   namedRanges.forEach(function(specNamedRange) {
     var specRange = specNamedRange.getRange();
     var mapRangeName = specNamedRange.getName().replace(rangeNameFilter, "").toLowerCase();
-    Logger.log(mapRangeName);
     if (formDataMap.has(mapRangeName)) {
       var rangeVals = specRange.getValues();
-      Logger.log("Data for name above was found in map");
       rangeVals[1][0] = formDataMap.get(mapRangeName);
       specRange.setValues(rangeVals);
       if (mapRangeName.includes("_")){
-        Logger.log("Made it inside of here!");
         switch (mapRangeName.split("_")[1]) {
           case "date": 
             specRange.setNumberFormat("dddd, mmmm d yyy at h:mm am/pm");
@@ -159,9 +185,6 @@ function sortInfo_(newSheet, formDataMap){
       }
     }
   });
-  
-  // might not want this, but we will see
-  newSheet.autoResizeColumns(1, newSheet.getMaxColumns());
 }
 
 
@@ -209,6 +232,9 @@ function archiveFinishedRows(){
   var archiveNextRange = archive.getRange(archive.getDataRange().getHeight() + 1, 1, archive.getMaxRows(), formResponseRange.getWidth());
   var archiveNextValues = archiveNextRange.getValues();
   
+  if (formResponse.getName() !== "Form Responses 1"){
+    throw new Error("Please make sure \"Form Response 1\" is the active sheet.");
+  }
   
   var archivePos = 0;
   for (var i = 3; i < formResponseRange.getHeight() + 1; i++) {
@@ -220,7 +246,6 @@ function archiveFinishedRows(){
     }
   }
   archiveNextRange.setValues(archiveNextValues);
-  
   
   var finishedArchiveRange = archive.getRange(3, 1, archive.getDataRange().getHeight() - 2, 1);
   for (var i = 1; i < finishedArchiveRange.getHeight() + 1; i++){
