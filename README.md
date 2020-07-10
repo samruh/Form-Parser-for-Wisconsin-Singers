@@ -1,2 +1,2 @@
-# Form-Parser-for-Wisconsin-Singers
-This is a script for parsing through the data returned from a form and making formatted sheets for use in the pre-show data gathering for Wisconsin Singers.
+# Form Parser for Wisconsin Singers
+This is a script for parsing through the data returned from a form and making formatted sheets for use in the pre-show data gathering for Wisconsin Singers. The script is all written in javascript using the Google App Scripts development platform. The script is written for Google Sheets and operates on data sent there from a Google Form. Some of the features include error checking to make sure the correct sheet is active, ability to copy named ranges from a template to a new sheet, and special tags to format data in unique ways. 
